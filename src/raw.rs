@@ -25,9 +25,6 @@
 use std::io::{self, Write};
 use std::ops;
 
-use sys::Termios;
-use sys::attr::{get_terminal_attr, raw_terminal_attr, set_terminal_attr};
-
 /// The timeout of an escape code control sequence, in milliseconds.
 pub const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
 
@@ -35,14 +32,32 @@ pub const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
 /// dropped.
 ///
 /// Restoring will entirely bring back the old TTY state.
+#[cfg(windows)]
+pub struct RawTerminal<W: Write> {
+    output: W,
+}
+
+#[cfg(not(windows))]
+use sys::Termios;
+/// A terminal restorer, which keeps the previous state of the terminal, and restores it, when
+/// dropped.
+///
+/// Restoring will entirely bring back the old TTY state.
+#[cfg(not(windows))]
 pub struct RawTerminal<W: Write> {
     prev_ios: Termios,
     output: W,
 }
 
 impl<W: Write> Drop for RawTerminal<W> {
+    #[cfg(not(windows))]
     fn drop(&mut self) {
         set_terminal_attr(&self.prev_ios).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn drop(&mut self) {
+        ::sys::tty::set_raw_input_mode(false);
     }
 }
 
@@ -86,7 +101,10 @@ pub trait IntoRawMode: Write + Sized {
 }
 
 impl<W: Write> IntoRawMode for W {
+    #[cfg(not(windows))]
     fn into_raw_mode(self) -> io::Result<RawTerminal<W>> {
+        use sys::attr::{get_terminal_attr, raw_terminal_attr, set_terminal_attr};
+
         let mut ios = get_terminal_attr()?;
         let prev_ios = ios;
 
@@ -98,6 +116,12 @@ impl<W: Write> IntoRawMode for W {
             prev_ios: prev_ios,
             output: self,
         })
+    }
+
+    #[cfg(windows)]
+    fn into_raw_mode(self) -> io::Result<RawTerminal<W>> {
+        ::sys::tty::set_raw_input_mode(true);
+        Ok(RawTerminal { output: self })
     }
 }
 

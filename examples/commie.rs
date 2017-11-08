@@ -26,6 +26,8 @@ const COMMUNISM: &'static str = r#"
 "#;
 
 fn main() {
+    termion::init();
+
     let mut state = 0;
 
     println!("\n{}{}{}{}{}{}",

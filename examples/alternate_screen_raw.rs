@@ -15,6 +15,8 @@ fn write_alt_screen_msg<W: Write>(screen: &mut W) {
 }
 
 fn main() {
+    termion::init();
+
     let stdin = stdin();
     let mut screen = AlternateScreen::from(stdout().into_raw_mode().unwrap());
     write!(screen, "{}", termion::cursor::Hide).unwrap();

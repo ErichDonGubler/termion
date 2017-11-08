@@ -3,6 +3,8 @@ extern crate termion;
 use termion::{color, style};
 
 fn main() {
+    termion::init();
+
     println!("{}Red", color::Fg(color::Red));
     println!("{}Blue", color::Fg(color::Blue));
     println!("{}Blue'n'Bold{}", style::Bold, style::Reset);

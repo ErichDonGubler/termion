@@ -28,6 +28,8 @@ fn rainbow<W: Write>(stdout: &mut W, blue: u8) {
 }
 
 fn main() {
+    termion::init();
+
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
 

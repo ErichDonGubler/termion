@@ -15,12 +15,16 @@
 #[path="sys/redox/mod.rs"]
 mod sys;
 
-#[cfg(unix)]
+#[cfg(all(not(target_os = "redox"), not(windows)))]
 #[path="sys/unix/mod.rs"]
 mod sys;
 
+#[cfg(windows)]
+#[path="sys/windows/mod.rs"]
+mod sys;
+
 pub use sys::size::terminal_size;
-pub use sys::tty::{is_tty, get_tty};
+pub use sys::tty::{is_tty, get_tty, init};
 
 mod async;
 pub use async::{AsyncReader, async_stdin};

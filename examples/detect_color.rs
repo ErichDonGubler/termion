@@ -5,6 +5,8 @@ use termion::raw::IntoRawMode;
 use std::io::stdout;
 
 fn main() {
+    termion::init();
+
     let count;
     {
         let mut term = stdout().into_raw_mode().unwrap();

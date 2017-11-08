@@ -7,6 +7,8 @@ use termion::raw::IntoRawMode;
 use std::io::{self, Write};
 
 fn main() {
+    termion::init();
+
     let stdin = io::stdin();
     let mut stdout = MouseTerminal::from(io::stdout().into_raw_mode().unwrap());
 

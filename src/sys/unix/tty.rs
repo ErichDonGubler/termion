@@ -12,6 +12,8 @@ pub fn is_tty<T: AsRawFd>(stream: &T) -> bool {
 /// Get the TTY device.
 ///
 /// This allows for getting stdio representing _only_ the TTY, and not other streams.
-pub fn get_tty() -> io::Result<fs::File> {
-    fs::OpenOptions::new().read(true).write(true).open("/dev/tty")
+pub fn get_tty() -> io::Result<Box<io::Read>> {
+    fs::OpenOptions::new().read(true).write(true).open("/dev/tty").map(|file| Box::new(file) as Box<io::Read>)
 }
+
+pub fn init() {}
