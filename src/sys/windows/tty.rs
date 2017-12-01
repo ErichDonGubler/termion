@@ -21,7 +21,6 @@ pub struct PreInitState {
 impl Drop for PreInitState {
     fn drop(&mut self) {
         if self.do_cleanup {
-            println!("cleaning up");
             set_console_mode(StdStream::OUT, self.current_out_mode).ok();
             set_console_mode(StdStream::IN, self.current_in_mode).ok();
         }
@@ -67,10 +66,10 @@ fn do_init() -> Result<PreInitState, io::Error> {
     println!("cim {:x}, com {:x}", current_in_mode, current_out_mode);
 
     Ok(PreInitState {
-           do_cleanup: true,
-           current_out_mode,
-           current_in_mode,
-       })
+        do_cleanup: true,
+        current_out_mode,
+        current_in_mode,
+    })
 }
 
 #[derive(Copy, Clone)]
@@ -140,9 +139,6 @@ pub fn is_tty(_: &AsRawHandle) -> bool {
 /// This allows for getting stdio representing _only_ the TTY, and not other streams.
 #[cfg(target_os = "windows")]
 pub fn get_tty() -> io::Result<Box<io::Read>> {
-
-
-
     // TODO:
     // should this be CreateFile CONOUT$ ??
 

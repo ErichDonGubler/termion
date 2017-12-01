@@ -47,19 +47,32 @@ mod test {
 
     #[test]
     fn test_get_terminal_attr() {
-        sys::attr::get_terminal_attr().unwrap();
-        sys::attr::get_terminal_attr().unwrap();
-        sys::attr::get_terminal_attr().unwrap();
+        for _ in 0..3 {
+            use sys::tty::*;
+            #[cfg(not(windows))]
+            get_terminal_attr().unwrap();
+            #[cfg(windows)]
+            {
+                // XXX: Is this even equivalent?
+                get_console_mode(StdStream::IN).unwrap();
+                get_console_mode(StdStream::OUT).unwrap();
+            }
+        }
     }
 
     #[test]
     fn test_set_terminal_attr() {
-        let ios = sys::attr::get_terminal_attr().unwrap();
-        sys::attr::set_terminal_attr(&ios).unwrap();
+        #[cfg(not(windows))]
+        {
+            let ios = sys::tty::get_terminal_attr().unwrap();
+            sys::tty::set_terminal_attr(&ios).unwrap();
+        }
+        // FIXME: Need an equivalent test for Windows here
     }
 
     #[test]
     fn test_size() {
         sys::size::terminal_size().unwrap();
+        // FIXME: This fails in MSYS2/Cygwin.
     }
 }

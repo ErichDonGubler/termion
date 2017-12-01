@@ -5,7 +5,7 @@ use termion::raw::IntoRawMode;
 use std::io::{Read, Write, stdout, stdin};
 
 fn main() {
-    termion::init();
+    let _init = termion::init();
 
     // Initialize 'em all.
     let stdout = stdout();

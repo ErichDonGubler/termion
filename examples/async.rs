@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    termion::init();
+    let _init = termion::init();
 
     let stdout = stdout();
     let mut stdout = stdout.lock().into_raw_mode().unwrap();

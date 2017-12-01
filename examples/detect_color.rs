@@ -5,7 +5,7 @@ use termion::raw::IntoRawMode;
 use std::io::stdout;
 
 fn main() {
-    termion::init();
+    let _init = termion::init();
 
     let count;
     {

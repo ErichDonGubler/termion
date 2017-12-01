@@ -5,7 +5,7 @@ use std::io::{Write, stdout};
 use std::{time, thread};
 
 fn main() {
-    termion::init();
+    let _init = termion::init();
 
     {
         let mut screen = AlternateScreen::from(stdout());

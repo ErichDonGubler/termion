@@ -3,7 +3,7 @@ extern crate termion;
 use termion::{color, style};
 
 fn main() {
-    termion::init();
+    let _init = termion::init();
 
     println!("{lighgreen}-- src/test/ui/borrow-errors.rs at 82:18 --\n\
               {red}error: {reset}{bold}two closures require unique access to `vec` at the same time {reset}{bold}{magenta}[E0524]{reset}\n\

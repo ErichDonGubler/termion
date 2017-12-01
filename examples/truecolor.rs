@@ -4,7 +4,7 @@ use termion::{color, cursor, clear};
 use std::{thread, time};
 
 fn main() {
-    termion::init();
+    let _init = termion::init();
 
     for r in 0..255 {
         let c = color::Rgb(r, !r, 2 * ((r % 128) as i8 - 64).abs() as u8);

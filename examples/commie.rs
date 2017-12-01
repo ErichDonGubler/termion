@@ -26,7 +26,7 @@ const COMMUNISM: &'static str = r#"
 "#;
 
 fn main() {
-    termion::init();
+    let _init = termion::init();
 
     let mut state = 0;
 
