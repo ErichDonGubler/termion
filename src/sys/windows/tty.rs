@@ -1,13 +1,14 @@
 // it'll be an api-breaking change to do it later
 use std::io;
 use std::os::windows::prelude::*;
+use ::sys::winapi::_core::ptr::null_mut;
+use ::sys::winapi::ctypes::c_void;
 use ::sys::winapi::shared::minwindef::{FALSE, DWORD};
 use ::sys::winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
 use ::sys::winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use ::sys::winapi::um::processenv::GetStdHandle;
 use ::sys::winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
-use ::sys::winapi::um::wincon::{ENABLE_PROCESSED_OUTPUT, ENABLE_WRAP_AT_EOL_OUTPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_ECHO_INPUT};
-use ::sys::winapi::um::wincon::{ENABLE_VIRTUAL_TERMINAL_PROCESSING};
+use ::sys::winapi::um::wincon::{ENABLE_PROCESSED_OUTPUT, ENABLE_WRAP_AT_EOL_OUTPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_ECHO_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING, PeekConsoleInputW};
 use ::sys::winapi::um::winnt::HANDLE;
 
 pub struct PreInitState {
@@ -27,10 +28,10 @@ impl Drop for PreInitState {
 
 pub fn init() -> PreInitState {
     do_init().unwrap_or(PreInitState {
-                            do_cleanup: false,
-                            current_out_mode: 0,
-                            current_in_mode: 0,
-                        })
+        do_cleanup: false,
+        current_out_mode: 0,
+        current_in_mode: 0,
+    })
 }
 
 fn do_init() -> Result<PreInitState, io::Error> {
@@ -128,8 +129,19 @@ pub fn set_raw_input_mode(enable: bool) -> bool {
 }
 
 // TODO: provide an implementation of this, perhaps just delegating to the atty crate?
-pub fn is_tty(_: &AsRawHandle) -> bool {
-    true
+pub fn is_tty(stream: &AsRawHandle) -> bool {
+    let stream = stream.as_raw_handle() as *mut c_void;
+
+    if stream == INVALID_HANDLE_VALUE {
+        return false;
+    };
+
+    let mut read: DWORD = 0;
+    if unsafe { PeekConsoleInputW(stream as *mut c_void, null_mut(), 0, &mut read) == 0 } {
+        return false;
+    };
+
+    return true;
 }
 
 /// Get the TTY device.
