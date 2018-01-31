@@ -1,15 +1,21 @@
 // it'll be an api-breaking change to do it later
 use std::io;
 use std::os::windows::prelude::*;
+use ::sys::widestring::WideString;
 use ::sys::winapi::_core::ptr::null_mut;
 use ::sys::winapi::ctypes::c_void;
-use ::sys::winapi::shared::minwindef::{FALSE, DWORD};
-use ::sys::winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
-use ::sys::winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use ::sys::winapi::shared::minwindef::{FALSE, DWORD, LPVOID, HLOCAL};
+use ::sys::winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode, GetNumberOfConsoleInputEvents};
+use ::sys::winapi::um::fileapi::{OPEN_EXISTING, ReadFile, CreateFileW};
+use ::sys::winapi::um::handleapi::{INVALID_HANDLE_VALUE, CloseHandle};
 use ::sys::winapi::um::processenv::GetStdHandle;
-use ::sys::winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
-use ::sys::winapi::um::wincon::{ENABLE_PROCESSED_OUTPUT, ENABLE_WRAP_AT_EOL_OUTPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_ECHO_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING, PeekConsoleInputW};
-use ::sys::winapi::um::winnt::HANDLE;
+use ::sys::winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, LocalFree};
+use ::sys::winapi::um::winnt::{LPWSTR, HANDLE, GENERIC_READ, GENERIC_WRITE, FILE_SHARE_READ};
+use ::sys::winapi::um::wincon::{
+    ENABLE_PROCESSED_OUTPUT, ENABLE_WRAP_AT_EOL_OUTPUT, ENABLE_LINE_INPUT,
+    ENABLE_PROCESSED_INPUT,  ENABLE_ECHO_INPUT,         ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+    PeekConsoleInputW
+};
 
 pub struct PreInitState {
     do_cleanup: bool,
@@ -129,7 +135,7 @@ pub fn set_raw_input_mode(enable: bool) -> bool {
 }
 
 // TODO: provide an implementation of this, perhaps just delegating to the atty crate?
-pub fn is_tty(stream: &AsRawHandle) -> bool {
+pub fn is_tty<T: AsRawHandle>(stream: &T) -> bool {
     let stream = stream.as_raw_handle() as *mut c_void;
 
     if stream == INVALID_HANDLE_VALUE {
@@ -148,15 +154,45 @@ pub fn is_tty(stream: &AsRawHandle) -> bool {
 ///
 /// This allows for getting stdio representing _only_ the TTY, and not other streams.
 #[cfg(target_os = "windows")]
-pub fn get_tty() -> io::Result<Box<io::Read>> {
-    // TODO:
-    // should this be CreateFile CONOUT$ ??
+pub fn get_tty() -> io::Result<String> {
+    let widestr: WideString;
 
-    // alternatively, return stdin if is_tty(stdin) else Err() ??
+    // UTF-16 encoded CONIN$ file
+    let conin_file: Vec<u16> = "CONIN$\0".encode_utf16().collect();
+    let hconin    : HANDLE   = unsafe { CreateFileW(conin_file.as_ptr(),
+        GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, null_mut(), OPEN_EXISTING, 0, null_mut()
+    ) };
 
-    // use std::env;
-    // let tty = try!(env::var("TTY").map_err(|x| io::Error::new(io::ErrorKind::NotFound, x)));
-    // fs::OpenOptions::new().read(true).write(true).open(tty)
+    if hconin == INVALID_HANDLE_VALUE {
+        return Ok("".to_string());
+    };
 
-    Ok(Box::new(io::stdin()))
+    let mut events: DWORD = 0;
+    if unsafe { GetNumberOfConsoleInputEvents(hconin, &mut events) } == 0 {
+        unsafe {
+            CloseHandle(hconin);
+        }
+        return Ok("".to_string());
+    }
+
+    let mut dw_out: DWORD = 0;
+    if unsafe { GetConsoleMode(hconin, &mut dw_out) } == 0 {
+        return Ok("".to_string());
+    }
+
+    unsafe {
+        SetConsoleMode(hconin, dw_out & ENABLE_LINE_INPUT);
+    }
+
+    let mut file_buffer: LPWSTR = null_mut();
+    let mut file_read  : DWORD  = 0;
+
+    unsafe {
+        ReadFile(hconin, (&mut file_buffer as *mut LPWSTR) as LPVOID, events, &mut file_read, null_mut());
+
+        widestr = WideString::from_ptr(file_buffer, file_read as usize);
+        LocalFree(file_buffer as HLOCAL);
+    }
+
+    Ok(widestr.to_string_lossy())
 }
