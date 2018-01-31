@@ -7,7 +7,7 @@ use event::{self, Event, Key};
 use raw::IntoRawMode;
 
 #[cfg(windows)]
-use ::sys::winapi::DWORD;
+use ::sys::winapi::shared::minwindef::DWORD;
 
 /// An iterator over input keys.
 pub struct Keys<R> {
@@ -206,7 +206,7 @@ impl<W: Write> From<W> for MouseTerminal<W> {
     #[cfg(windows)]
     fn from(mut from: W) -> MouseTerminal<W> {
         use ::sys::tty::*;
-        use ::sys::winapi::wincon::{ENABLE_MOUSE_INPUT, ENABLE_QUICK_EDIT_MODE, ENABLE_ECHO_INPUT};
+        use ::sys::winapi::um::wincon::{ENABLE_MOUSE_INPUT, ENABLE_QUICK_EDIT_MODE, ENABLE_ECHO_INPUT};
         const ENABLE_VIRTUAL_TERMINAL_INPUT : DWORD = 0x0200;
 
         let opt_state = get_console_mode(StdStream::IN).ok();

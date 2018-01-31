@@ -6,8 +6,8 @@ pub fn terminal_size() -> io::Result<(u16, u16)> {
     // Should this use "get_tty()"? As it is, it mirrors the
     // unix version in useing stdout.
 
-    use ::sys::kernel32::GetConsoleScreenBufferInfo;
-    use ::sys::winapi::TRUE;
+    use ::sys::winapi::um::wincon::GetConsoleScreenBufferInfo;
+    use ::sys::winapi::shared::minwindef::TRUE;
     use std::mem;
     use ::sys::tty::{get_std_handle, StdStream};
 

@@ -1,16 +1,14 @@
 // it'll be an api-breaking change to do it later
 use std::io;
 use std::os::windows::prelude::*;
-use ::sys::kernel32::{GetStdHandle, GetConsoleMode, SetConsoleMode};
-use ::sys::winapi::wincon::{ENABLE_PROCESSED_OUTPUT, ENABLE_WRAP_AT_EOL_OUTPUT, ENABLE_LINE_INPUT,
-                            ENABLE_PROCESSED_INPUT, ENABLE_ECHO_INPUT};
-
-use ::sys::winapi::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
-use ::sys::winapi::{FALSE, DWORD, HANDLE, INVALID_HANDLE_VALUE};
-
-// once winapi 0.3 is available
-// use winapi::wincon::{ENABLE_VIRTUAL_TERMINAL_PROCESSING};
-const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
+use ::sys::winapi::shared::minwindef::{FALSE, DWORD};
+use ::sys::winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
+use ::sys::winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use ::sys::winapi::um::processenv::GetStdHandle;
+use ::sys::winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
+use ::sys::winapi::um::wincon::{ENABLE_PROCESSED_OUTPUT, ENABLE_WRAP_AT_EOL_OUTPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_ECHO_INPUT};
+use ::sys::winapi::um::wincon::{ENABLE_VIRTUAL_TERMINAL_PROCESSING};
+use ::sys::winapi::um::winnt::HANDLE;
 
 pub struct PreInitState {
     do_cleanup: bool,
