@@ -10,7 +10,7 @@ fn main() {
     let _init = termion::init();
 
     let stdout = stdout();
-    let mut stdout = stdout.lock().into_raw_mode().unwrap();
+    let mut stdout = stdout.into_raw_mode().unwrap();
     let mut stdin = async_stdin().bytes();
 
     write!(stdout,
@@ -27,7 +27,7 @@ fn main() {
         if let Some(Ok(b'q')) = b {
             break;
         }
-
+        
         stdout.flush().unwrap();
 
         thread::sleep(Duration::from_millis(50));

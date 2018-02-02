@@ -17,13 +17,14 @@ use sys::tty::get_tty;
 pub fn async_stdin() -> AsyncReader {
     let (send, recv) = mpsc::channel();
 
-    thread::spawn(move || for i in get_tty().unwrap().bytes() {
+    thread::spawn(move || loop {
+        for i in get_tty().unwrap().bytes() {
+            #[cfg(target_os = "windows")]
+            let i = Ok(i);
 
-        #[cfg(target_os = "windows")]
-        let i = Ok(i);
-
-        if send.send(i).is_err() {
-            return;
+            if send.send(i).is_err() {
+                return;
+            }
         }
     });
 
