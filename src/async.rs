@@ -17,6 +17,19 @@ use sys::tty::get_tty;
 pub fn async_stdin() -> AsyncReader {
     let (send, recv) = mpsc::channel();
 
+    #[cfg(not(target_os = "windows"))]
+    thread::spawn(move || for i in get_tty().unwrap().bytes() {
+        #[cfg(target_os = "windows")]
+        let i = Ok(i);
+
+        if send.send(i).is_err() {
+            return;
+        }
+    });
+
+    // Windows exits the new thread after all bytes from the stdin have been read
+    // on the first iteration. We need to force a continuous loop.
+    #[cfg(target_os = "windows")]
     thread::spawn(move || loop {
         for i in get_tty().unwrap().bytes() {
             #[cfg(target_os = "windows")]

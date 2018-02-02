@@ -10,7 +10,7 @@ fn main() {
     let _init = termion::init();
 
     let stdout = stdout();
-    let mut stdout = stdout.into_raw_mode().unwrap();
+    let mut stdout = stdout.lock().into_raw_mode().unwrap();
     let mut stdin = async_stdin().bytes();
 
     write!(stdout,
