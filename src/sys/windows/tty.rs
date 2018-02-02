@@ -150,49 +150,64 @@ pub fn is_tty<T: AsRawHandle>(stream: &T) -> bool {
     return true;
 }
 
+struct WindowsConIn {
+    handle: HANDLE,
+    buffered_events: Vec<u8>,
+}
+
+impl WindowsConIn {
+    fn new() -> io::Result<WindowsConIn> {
+        // UTF-16 encoded CONIN$ file
+        let conin_file: Vec<u16> = "CONIN$\0".encode_utf16().collect();
+        let con_in_handle: HANDLE = unsafe { CreateFileW(conin_file.as_ptr(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, null_mut(), OPEN_EXISTING, 0, null_mut()) };
+
+        if con_in_handle == INVALID_HANDLE_VALUE {
+            Err(io::Error::new(io::ErrorKind::Other, "cannot access CONIN$")) // TODO: Figure out how to get this error
+        }
+        else {
+            Ok(con_in_handle)
+        }
+    }
+
+    fn buffer_events() {
+        // TODO: How do we buffer this?
+        let widestr: WideString;
+
+        let mut events: DWORD = 0;
+        if unsafe { GetNumberOfConsoleInputEvents(hconin, &mut events) } == 0 {
+            unsafe { CloseHandle(hconin); }
+            return Ok("".to_string());
+        }
+
+        let mut dw_out: DWORD = 0;
+        if unsafe { GetConsoleMode(hconin, &mut dw_out) } == 0 {
+            return Ok("".to_string());
+        }
+
+        unsafe { SetConsoleMode(hconin, dw_out & ENABLE_LINE_INPUT); }
+
+        let mut file_buffer: LPWSTR = null_mut();
+        let mut file_read: DWORD = 0;
+
+        unsafe {
+            ReadFile(hconin, (&mut file_buffer as *mut LPWSTR) as LPVOID, events, &mut file_read, null_mut());
+
+            widestr = WideString::from_ptr(file_buffer, file_read as usize);
+            LocalFree(file_buffer as HLOCAL);
+        }
+
+        Ok(widestr.to_string_lossy())
+    }
+}
+
+impl std::io::Read for WindowsConIn {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    }
+}
+
 /// Get the TTY device.
 ///
 /// This allows for getting stdio representing _only_ the TTY, and not other streams.
 #[cfg(target_os = "windows")]
 pub fn get_tty() -> io::Result<String> {
-    let widestr: WideString;
-
-    // UTF-16 encoded CONIN$ file
-    let conin_file: Vec<u16> = "CONIN$\0".encode_utf16().collect();
-    let hconin    : HANDLE   = unsafe { CreateFileW(conin_file.as_ptr(),
-        GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, null_mut(), OPEN_EXISTING, 0, null_mut()
-    ) };
-
-    if hconin == INVALID_HANDLE_VALUE {
-        return Ok("".to_string());
-    };
-
-    let mut events: DWORD = 0;
-    if unsafe { GetNumberOfConsoleInputEvents(hconin, &mut events) } == 0 {
-        unsafe {
-            CloseHandle(hconin);
-        }
-        return Ok("".to_string());
-    }
-
-    let mut dw_out: DWORD = 0;
-    if unsafe { GetConsoleMode(hconin, &mut dw_out) } == 0 {
-        return Ok("".to_string());
-    }
-
-    unsafe {
-        SetConsoleMode(hconin, dw_out & ENABLE_LINE_INPUT);
-    }
-
-    let mut file_buffer: LPWSTR = null_mut();
-    let mut file_read  : DWORD  = 0;
-
-    unsafe {
-        ReadFile(hconin, (&mut file_buffer as *mut LPWSTR) as LPVOID, events, &mut file_read, null_mut());
-
-        widestr = WideString::from_ptr(file_buffer, file_read as usize);
-        LocalFree(file_buffer as HLOCAL);
-    }
-
-    Ok(widestr.to_string_lossy())
 }
