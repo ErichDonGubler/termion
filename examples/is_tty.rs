@@ -1,7 +1,5 @@
 extern crate termion;
 
-use std::fs;
-
 fn main() {
     let _init = termion::init();
 

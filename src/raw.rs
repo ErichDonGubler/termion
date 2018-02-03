@@ -52,7 +52,7 @@ pub struct RawTerminal<W: Write> {
 impl<W: Write> Drop for RawTerminal<W> {
     #[cfg(not(windows))]
     fn drop(&mut self) {
-        set_terminal_attr(&self.prev_ios).unwrap();
+        ::sys::attr::set_terminal_attr(&self.prev_ios).unwrap();
     }
 
     #[cfg(windows)]
@@ -128,13 +128,11 @@ impl<W: Write> IntoRawMode for W {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::io::{Write, stdout};
+    use std::io::{stdout};
 
     #[test]
     fn test_into_raw_mode() {
-        let mut out = stdout().into_raw_mode().unwrap();
-
-        out.write_all(b"this is a test, muahhahahah\r\n").unwrap();
+        let out = stdout().into_raw_mode().unwrap();
 
         drop(out);
     }

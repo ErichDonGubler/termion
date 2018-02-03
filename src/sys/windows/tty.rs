@@ -1,23 +1,25 @@
 // it'll be an api-breaking change to do it later
 use std::io;
 use std::os::windows::prelude::*;
+use ::sys::winapi::ctypes::c_void;
 use ::sys::winapi::_core::ptr::null_mut;
 use ::sys::winapi::shared::minwindef::{BOOL, FALSE, DWORD, LPVOID};
 use ::sys::winapi::um::consoleapi::{ReadConsoleW, GetConsoleMode, SetConsoleMode};
-use ::sys::winapi::um::fileapi::{GetFileType, OPEN_EXISTING, CreateFileW};
+use ::sys::winapi::um::fileapi::{OPEN_EXISTING, CreateFileW};
 use ::sys::winapi::um::handleapi::{INVALID_HANDLE_VALUE, CloseHandle};
 use ::sys::winapi::um::processenv::GetStdHandle;
-use ::sys::winapi::um::winbase::{FILE_TYPE_CHAR, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
+use ::sys::winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
 use ::sys::winapi::um::winnt::{LPWSTR, HANDLE, GENERIC_READ, GENERIC_WRITE, FILE_SHARE_READ};
 use ::sys::winapi::um::wincon::{
     ENABLE_PROCESSED_OUTPUT, ENABLE_WRAP_AT_EOL_OUTPUT, ENABLE_LINE_INPUT,
-    ENABLE_PROCESSED_INPUT,  ENABLE_ECHO_INPUT,         ENABLE_VIRTUAL_TERMINAL_PROCESSING
+    ENABLE_PROCESSED_INPUT,  ENABLE_ECHO_INPUT,         ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+    PeekConsoleInputW
 };
 
 pub struct PreInitState {
-    do_cleanup: bool,
+    do_cleanup      : bool,
     current_out_mode: DWORD,
-    current_in_mode: DWORD,
+    current_in_mode : DWORD,
 }
 
 impl Drop for PreInitState {
@@ -29,11 +31,12 @@ impl Drop for PreInitState {
     }
 }
 
+#[allow(missing_docs)]
 pub fn init() -> PreInitState {
     do_init().unwrap_or(PreInitState {
-        do_cleanup: false,
+        do_cleanup      : false,
         current_out_mode: 0,
-        current_in_mode: 0,
+        current_in_mode : 0,
     })
 }
 
@@ -43,7 +46,7 @@ fn do_init() -> Result<PreInitState, io::Error> {
     // than reporting an error. The assumption is that the cleanup in the drop trait
     // will always be able to set the flags that are currently set.
     let current_out_mode = get_console_mode(StdStream::OUT)?;
-    let current_in_mode = get_console_mode(StdStream::IN)?;
+    let current_in_mode  = get_console_mode(StdStream::IN)?;
 
     let new_out_mode = current_out_mode | ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT |
                        ENABLE_VIRTUAL_TERMINAL_PROCESSING;
@@ -131,50 +134,49 @@ pub fn set_raw_input_mode(enable: bool) -> bool {
         .is_ok()
 }
 
-// TODO: provide an implementation of this, perhaps just delegating to the atty crate?
-// pub fn is_tty<T: AsRawHandle>(stream: &T) -> bool {
-//     let stream = stream.as_raw_handle() as *mut c_void;
+#[allow(missing_docs)]
+ pub fn is_tty<T: AsRawHandle>(stream: &T) -> bool {
+    let stream = stream.as_raw_handle() as *mut c_void;
 
-//     if stream == INVALID_HANDLE_VALUE {
-//         return false;
-//     };
+    if stream == INVALID_HANDLE_VALUE {
+        return false;
+    };
 
-//     let mut read: DWORD = 0;
-//     if unsafe { PeekConsoleInputW(stream as *mut c_void, null_mut(), 0, &mut read) == 0 } {
-//         return false;
-//     };
+    let mut read: DWORD = 0;
+    if unsafe { PeekConsoleInputW(stream as *mut c_void, null_mut(), 0, &mut read) == 0 } {
+        return false;
+    };
 
-//     return true;
-// }
-
-pub fn is_tty<T: AsRawHandle>(stream: &T) -> bool {
-    let stream = stream.as_raw_handle() as HANDLE;
-    return stream != INVALID_HANDLE_VALUE && unsafe { GetFileType(stream) } == FILE_TYPE_CHAR;
+    return true;
 }
 
+#[derive(Debug)]
 struct WindowsConIn {
-    handle: HANDLE,
-    buffered_utf8: Vec<u8>,
+    handle        : HANDLE,
+    buffered_utf8 : Vec<u8>,
     buffered_utf16: Vec<u16>,
 }
 
 impl WindowsConIn {
-    const MAX_BYTES_TO_READ: usize = 8192;
+    const MAX_BYTES_TO_READ      : usize = 8192;
     const MAX_UTF16_CHARS_TO_READ: usize = WindowsConIn::MAX_BYTES_TO_READ / 3;
 
     fn new() -> io::Result<WindowsConIn> {
         // UTF-16 encoded CONIN$ file
-        let conin_file: Vec<u16> = "CONIN$\0".encode_utf16().collect();
-        let con_in_handle: HANDLE = unsafe { CreateFileW(conin_file.as_ptr(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, null_mut(), OPEN_EXISTING, 0, null_mut()) };
+        let conin_file   : Vec<u16> = "CONIN$\0".encode_utf16().collect();
+        let con_in_handle: HANDLE   = unsafe { 
+            CreateFileW(conin_file.as_ptr(), 
+                GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, null_mut(), OPEN_EXISTING, 0, null_mut()
+            ) 
+        };
 
         if con_in_handle == INVALID_HANDLE_VALUE {
             Err(::std::io::Error::last_os_error()) // TODO: Figure out how to get this error
-        }
-        else {
+        } else {
             Ok(WindowsConIn {
-                handle: con_in_handle,
+                handle        : con_in_handle,
                 buffered_utf16: Vec::with_capacity(WindowsConIn::MAX_UTF16_CHARS_TO_READ),
-                buffered_utf8: Vec::with_capacity(WindowsConIn::MAX_BYTES_TO_READ),
+                buffered_utf8 : Vec::with_capacity(WindowsConIn::MAX_BYTES_TO_READ),
             })
         }
     }
@@ -182,25 +184,29 @@ impl WindowsConIn {
     fn buffer_into_utf8(&mut self) -> io::Result<()> {
         let hconin = &self.handle;
 
-        loop {
-            let mut utf_16_chars_read: DWORD = 0;
-            let succeeded: BOOL = unsafe { ReadConsoleW(*hconin, (self.buffered_utf16.as_mut_ptr() as LPWSTR) as LPVOID, WindowsConIn::MAX_UTF16_CHARS_TO_READ as DWORD, &mut utf_16_chars_read, null_mut()) };
+        self.buffered_utf16.clear();
+        self.buffered_utf8.clear();
 
-            if succeeded == FALSE {
-                Err(::std::io::Error::last_os_error())?;
-            }
+        let mut utf_16_chars_read: DWORD = 0;
+        let     succeeded        : BOOL  = unsafe {
+            ReadConsoleW(
+                *hconin,
+                (self.buffered_utf16.as_mut_ptr() as LPWSTR) as LPVOID,
+                WindowsConIn::MAX_UTF16_CHARS_TO_READ as DWORD, &mut utf_16_chars_read, null_mut()
+            )
+        };
 
-            if utf_16_chars_read == 0 {
-                break;
-            }
-            else {
-                unsafe { self.buffered_utf16.set_len(utf_16_chars_read as usize); }
-                let utf8_from_console = String::from_utf16_lossy(&self.buffered_utf16);
+        if succeeded == FALSE {
+            Err(::std::io::Error::last_os_error())?;
+        }
 
-                assert!(utf8_from_console.len() + self.buffered_utf8.len() < self.buffered_utf8.capacity());
-                // XXX: Could probably optimize better with WideStringToMultiByte
-                self.buffered_utf8.extend_from_slice(&utf8_from_console.into_bytes()[..]);
-            }
+        if utf_16_chars_read != 0 {
+            unsafe { self.buffered_utf16.set_len(utf_16_chars_read as usize); }
+            let utf8_from_console = String::from_utf16_lossy(&self.buffered_utf16);
+
+            assert!(utf8_from_console.len() + self.buffered_utf8.len() < self.buffered_utf8.capacity());
+            // XXX: Could probably optimize better with WideStringToMultiByte
+            self.buffered_utf8.extend_from_slice(&utf8_from_console.into_bytes()[..]);
         }
 
         Ok(())

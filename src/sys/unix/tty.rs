@@ -16,4 +16,5 @@ pub fn get_tty() -> io::Result<Box<io::Read>> {
     fs::OpenOptions::new().read(true).write(true).open("/dev/tty").map(|file| Box::new(file) as Box<io::Read>)
 }
 
+#[allow(missing_docs)]
 pub fn init() {}
