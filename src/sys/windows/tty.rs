@@ -1,20 +1,17 @@
 // it'll be an api-breaking change to do it later
 use std::io;
 use std::os::windows::prelude::*;
-use ::sys::widestring::WideString;
 use ::sys::winapi::_core::ptr::null_mut;
-use ::sys::winapi::ctypes::c_void;
-use ::sys::winapi::shared::minwindef::{FALSE, DWORD, LPVOID, HLOCAL};
-use ::sys::winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode, GetNumberOfConsoleInputEvents};
-use ::sys::winapi::um::fileapi::{OPEN_EXISTING, ReadFile, CreateFileW};
+use ::sys::winapi::shared::minwindef::{BOOL, FALSE, DWORD, LPVOID};
+use ::sys::winapi::um::consoleapi::{ReadConsoleW, GetConsoleMode, SetConsoleMode};
+use ::sys::winapi::um::fileapi::{GetFileType, OPEN_EXISTING, CreateFileW};
 use ::sys::winapi::um::handleapi::{INVALID_HANDLE_VALUE, CloseHandle};
 use ::sys::winapi::um::processenv::GetStdHandle;
-use ::sys::winapi::um::winbase::{STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, LocalFree};
+use ::sys::winapi::um::winbase::{FILE_TYPE_CHAR, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
 use ::sys::winapi::um::winnt::{LPWSTR, HANDLE, GENERIC_READ, GENERIC_WRITE, FILE_SHARE_READ};
 use ::sys::winapi::um::wincon::{
     ENABLE_PROCESSED_OUTPUT, ENABLE_WRAP_AT_EOL_OUTPUT, ENABLE_LINE_INPUT,
-    ENABLE_PROCESSED_INPUT,  ENABLE_ECHO_INPUT,         ENABLE_VIRTUAL_TERMINAL_PROCESSING,
-    PeekConsoleInputW
+    ENABLE_PROCESSED_INPUT,  ENABLE_ECHO_INPUT,         ENABLE_VIRTUAL_TERMINAL_PROCESSING
 };
 
 pub struct PreInitState {
@@ -135,73 +132,93 @@ pub fn set_raw_input_mode(enable: bool) -> bool {
 }
 
 // TODO: provide an implementation of this, perhaps just delegating to the atty crate?
+// pub fn is_tty<T: AsRawHandle>(stream: &T) -> bool {
+//     let stream = stream.as_raw_handle() as *mut c_void;
+
+//     if stream == INVALID_HANDLE_VALUE {
+//         return false;
+//     };
+
+//     let mut read: DWORD = 0;
+//     if unsafe { PeekConsoleInputW(stream as *mut c_void, null_mut(), 0, &mut read) == 0 } {
+//         return false;
+//     };
+
+//     return true;
+// }
+
 pub fn is_tty<T: AsRawHandle>(stream: &T) -> bool {
-    let stream = stream.as_raw_handle() as *mut c_void;
-
-    if stream == INVALID_HANDLE_VALUE {
-        return false;
-    };
-
-    let mut read: DWORD = 0;
-    if unsafe { PeekConsoleInputW(stream as *mut c_void, null_mut(), 0, &mut read) == 0 } {
-        return false;
-    };
-
-    return true;
+    let stream = stream.as_raw_handle() as HANDLE;
+    return stream != INVALID_HANDLE_VALUE && unsafe { GetFileType(stream) } == FILE_TYPE_CHAR;
 }
 
 struct WindowsConIn {
     handle: HANDLE,
-    buffered_events: Vec<u8>,
+    buffered_utf8: Vec<u8>,
+    buffered_utf16: Vec<u16>,
 }
 
 impl WindowsConIn {
+    const MAX_BYTES_TO_READ: usize = 8192;
+    const MAX_UTF16_CHARS_TO_READ: usize = WindowsConIn::MAX_BYTES_TO_READ / 3;
+
     fn new() -> io::Result<WindowsConIn> {
         // UTF-16 encoded CONIN$ file
         let conin_file: Vec<u16> = "CONIN$\0".encode_utf16().collect();
         let con_in_handle: HANDLE = unsafe { CreateFileW(conin_file.as_ptr(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, null_mut(), OPEN_EXISTING, 0, null_mut()) };
 
         if con_in_handle == INVALID_HANDLE_VALUE {
-            Err(io::Error::new(io::ErrorKind::Other, "cannot access CONIN$")) // TODO: Figure out how to get this error
+            Err(::std::io::Error::last_os_error()) // TODO: Figure out how to get this error
         }
         else {
-            Ok(con_in_handle)
+            Ok(WindowsConIn {
+                handle: con_in_handle,
+                buffered_utf16: Vec::with_capacity(WindowsConIn::MAX_UTF16_CHARS_TO_READ),
+                buffered_utf8: Vec::with_capacity(WindowsConIn::MAX_BYTES_TO_READ),
+            })
         }
     }
 
-    fn buffer_events() {
-        // TODO: How do we buffer this?
-        let widestr: WideString;
+    fn buffer_into_utf8(&mut self) -> io::Result<()> {
+        let hconin = &self.handle;
 
-        let mut events: DWORD = 0;
-        if unsafe { GetNumberOfConsoleInputEvents(hconin, &mut events) } == 0 {
-            unsafe { CloseHandle(hconin); }
-            return Ok("".to_string());
+        loop {
+            let mut utf_16_chars_read: DWORD = 0;
+            let succeeded: BOOL = unsafe { ReadConsoleW(*hconin, (self.buffered_utf16.as_mut_ptr() as LPWSTR) as LPVOID, WindowsConIn::MAX_UTF16_CHARS_TO_READ as DWORD, &mut utf_16_chars_read, null_mut()) };
+
+            if succeeded == FALSE {
+                Err(::std::io::Error::last_os_error())?;
+            }
+
+            if utf_16_chars_read == 0 {
+                break;
+            }
+            else {
+                unsafe { self.buffered_utf16.set_len(utf_16_chars_read as usize); }
+                let utf8_from_console = String::from_utf16_lossy(&self.buffered_utf16);
+
+                assert!(utf8_from_console.len() + self.buffered_utf8.len() < self.buffered_utf8.capacity());
+                // XXX: Could probably optimize better with WideStringToMultiByte
+                self.buffered_utf8.extend_from_slice(&utf8_from_console.into_bytes()[..]);
+            }
         }
 
-        let mut dw_out: DWORD = 0;
-        if unsafe { GetConsoleMode(hconin, &mut dw_out) } == 0 {
-            return Ok("".to_string());
-        }
-
-        unsafe { SetConsoleMode(hconin, dw_out & ENABLE_LINE_INPUT); }
-
-        let mut file_buffer: LPWSTR = null_mut();
-        let mut file_read: DWORD = 0;
-
-        unsafe {
-            ReadFile(hconin, (&mut file_buffer as *mut LPWSTR) as LPVOID, events, &mut file_read, null_mut());
-
-            widestr = WideString::from_ptr(file_buffer, file_read as usize);
-            LocalFree(file_buffer as HLOCAL);
-        }
-
-        Ok(widestr.to_string_lossy())
+        Ok(())
     }
 }
 
-impl std::io::Read for WindowsConIn {
+impl ::std::io::Read for WindowsConIn {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.buffer_into_utf8()?;
+        use std::io::Write;
+        let mut buf = buf;
+        Ok(buf.write(&self.buffered_utf8)?)
+    }
+}
+
+impl Drop for WindowsConIn {
+    fn drop(&mut self) {
+        unsafe { assert!(CloseHandle(self.handle) != FALSE); }
     }
 }
 
@@ -209,5 +226,6 @@ impl std::io::Read for WindowsConIn {
 ///
 /// This allows for getting stdio representing _only_ the TTY, and not other streams.
 #[cfg(target_os = "windows")]
-pub fn get_tty() -> io::Result<String> {
+pub fn get_tty() -> io::Result<Box<io::Read>> {
+    Ok(Box::new(WindowsConIn::new()?))
 }

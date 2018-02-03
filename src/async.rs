@@ -18,10 +18,6 @@ pub fn async_stdin() -> AsyncReader {
     let (send, recv) = mpsc::channel();
 
     thread::spawn(move || for i in get_tty().unwrap().bytes() {
-
-        #[cfg(target_os = "windows")]
-        let i = Ok(i);
-
         if send.send(i).is_err() {
             return;
         }
