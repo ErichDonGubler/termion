@@ -31,12 +31,11 @@ impl Drop for PreInitState {
     }
 }
 
-#[allow(missing_docs)]
 pub fn init() -> PreInitState {
     do_init().unwrap_or(PreInitState {
-        do_cleanup      : false,
+        do_cleanup: false,
         current_out_mode: 0,
-        current_in_mode : 0,
+        current_in_mode: 0,
     })
 }
 
@@ -46,7 +45,7 @@ fn do_init() -> Result<PreInitState, io::Error> {
     // than reporting an error. The assumption is that the cleanup in the drop trait
     // will always be able to set the flags that are currently set.
     let current_out_mode = get_console_mode(StdStream::OUT)?;
-    let current_in_mode  = get_console_mode(StdStream::IN)?;
+    let current_in_mode = get_console_mode(StdStream::IN)?;
 
     let new_out_mode = current_out_mode | ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT |
                        ENABLE_VIRTUAL_TERMINAL_PROCESSING;
@@ -67,8 +66,6 @@ fn do_init() -> Result<PreInitState, io::Error> {
 
     // ignore failure here and hope we are in a capable third party console
     set_console_mode(StdStream::IN, new_in_mode).ok();
-
-    println!("cim {:x}, com {:x}", current_in_mode, current_out_mode);
 
     Ok(PreInitState {
         do_cleanup: true,
@@ -152,14 +149,14 @@ pub fn set_raw_input_mode(enable: bool) -> bool {
 
 #[derive(Debug)]
 struct WindowsConIn {
-    handle        : HANDLE,
+    handle: HANDLE,
     buffered_utf8 : Vec<u8>,
     buffered_utf16: Vec<u16>,
 }
 
 impl WindowsConIn {
-    const MAX_BYTES_TO_READ      : usize = 8192;
-    const MAX_UTF16_CHARS_TO_READ: usize = WindowsConIn::MAX_BYTES_TO_READ / 3;
+    const MAX_BYTES_TO_READ: usize = 1024;
+    //const MAX_UTF16_CHARS_TO_READ: usize = WindowsConIn::MAX_BYTES_TO_READ / 3;
 
     fn new() -> io::Result<WindowsConIn> {
         // UTF-16 encoded CONIN$ file
@@ -175,7 +172,7 @@ impl WindowsConIn {
         } else {
             Ok(WindowsConIn {
                 handle        : con_in_handle,
-                buffered_utf16: Vec::with_capacity(WindowsConIn::MAX_UTF16_CHARS_TO_READ),
+                buffered_utf16: Vec::with_capacity(WindowsConIn::MAX_BYTES_TO_READ),
                 buffered_utf8 : Vec::with_capacity(WindowsConIn::MAX_BYTES_TO_READ),
             })
         }
@@ -188,26 +185,24 @@ impl WindowsConIn {
         self.buffered_utf8.clear();
 
         let mut utf_16_chars_read: DWORD = 0;
-        let     succeeded        : BOOL  = unsafe {
+        let succeeded: BOOL  = unsafe {
             ReadConsoleW(
                 *hconin,
                 (self.buffered_utf16.as_mut_ptr() as LPWSTR) as LPVOID,
-                WindowsConIn::MAX_UTF16_CHARS_TO_READ as DWORD, &mut utf_16_chars_read, null_mut()
+                WindowsConIn::MAX_BYTES_TO_READ as u32,
+                &mut utf_16_chars_read, null_mut()
             )
         };
 
         if succeeded == FALSE {
-            Err(::std::io::Error::last_os_error())?;
+            return Err(::std::io::Error::last_os_error())?;
         }
 
-        if utf_16_chars_read != 0 {
-            unsafe { self.buffered_utf16.set_len(utf_16_chars_read as usize); }
-            let utf8_from_console = String::from_utf16_lossy(&self.buffered_utf16);
+        unsafe { self.buffered_utf16.set_len(utf_16_chars_read as usize); }
+        let utf8_from_console = String::from_utf16_lossy(&self.buffered_utf16);
 
-            assert!(utf8_from_console.len() + self.buffered_utf8.len() < self.buffered_utf8.capacity());
-            // XXX: Could probably optimize better with WideStringToMultiByte
-            self.buffered_utf8.extend_from_slice(&utf8_from_console.into_bytes()[..]);
-        }
+        // XXX: Could probably optimize better with WideStringToMultiByte
+        self.buffered_utf8.extend_from_slice(&utf8_from_console.into_bytes()[..]);
 
         Ok(())
     }

@@ -190,7 +190,6 @@ pub struct MouseTerminal<W: Write> {
     term: W,
 }
 #[cfg(windows)]
-#[allow(missing_docs)]
 pub struct MouseTerminal<W: Write> {
     prev_in_state: Option<DWORD>,
     term: W,
