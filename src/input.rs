@@ -388,7 +388,6 @@ mod test {
 
     fn line_match(a: &str, b: Option<&str>) {
         let mut sink = io::sink();
-
         let line = a.as_bytes().read_line().unwrap();
         let pass = a.as_bytes().read_passwd(&mut sink).unwrap();
 
