@@ -7,6 +7,7 @@ rust:
 os:
     - linux
     - osx
+    - windows
 script:
     - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then FAKETTY="script -q /dev/null"; fi
     - $FAKETTY cargo build --verbose

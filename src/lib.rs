@@ -11,6 +11,8 @@
 //! For more information refer to the [README](https://github.com/redox-os/termion).
 #![warn(missing_docs)]
 
+extern crate numtoa;
+
 #[cfg(target_os = "redox")]
 #[path="sys/redox/mod.rs"]
 mod sys;
@@ -48,14 +50,18 @@ mod test {
     #[test]
     fn test_get_terminal_attr() {
         for _ in 0..3 {
-            use sys::tty::*;
             #[cfg(not(windows))]
-            get_terminal_attr().unwrap();
+            sys::attr::get_terminal_attr().unwrap();
             #[cfg(windows)]
             {
+                // FIXME: This fails in MSYS2/Cygwin.
+                /*
+                use sys::tty::*;
+
                 // XXX: Is this even equivalent?
                 get_console_mode(StdStream::IN).unwrap();
                 get_console_mode(StdStream::OUT).unwrap();
+                */
             }
         }
     }
@@ -64,15 +70,18 @@ mod test {
     fn test_set_terminal_attr() {
         #[cfg(not(windows))]
         {
-            let ios = sys::tty::get_terminal_attr().unwrap();
-            sys::tty::set_terminal_attr(&ios).unwrap();
+            let ios = sys::attr::get_terminal_attr().unwrap();
+            sys::attr::set_terminal_attr(&ios).unwrap();
         }
         // FIXME: Need an equivalent test for Windows here
     }
 
     #[test]
     fn test_size() {
-        sys::size::terminal_size().unwrap();
         // FIXME: This fails in MSYS2/Cygwin.
+        #[cfg(not(windows))]
+        {
+            sys::size::terminal_size().unwrap();
+        }
     }
 }

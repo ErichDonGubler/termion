@@ -39,6 +39,10 @@ pub struct RawTerminal<W: Write> {
 
 #[cfg(not(windows))]
 use sys::Termios;
+
+#[cfg(not(windows))]
+use sys::attr::{get_terminal_attr, raw_terminal_attr, set_terminal_attr};
+
 /// A terminal restorer, which keeps the previous state of the terminal, and restores it, when
 /// dropped.
 ///
@@ -122,6 +126,35 @@ impl<W: Write> IntoRawMode for W {
     fn into_raw_mode(self) -> io::Result<RawTerminal<W>> {
         ::sys::tty::set_raw_input_mode(true);
         Ok(RawTerminal { output: self })
+    }
+}
+
+impl<W: Write> RawTerminal<W> {
+    #[cfg(not(windows))]
+    pub fn suspend_raw_mode(&self) -> io::Result<()> {
+        set_terminal_attr(&self.prev_ios)?;
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    pub fn suspend_raw_mode(&self) -> io::Result<()> {
+        ::sys::tty::set_raw_input_mode(false);
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    pub fn activate_raw_mode(&self) -> io::Result<()> {
+        let mut ios = get_terminal_attr()?;
+        raw_terminal_attr(&mut ios);
+        set_terminal_attr(&ios)?;
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    pub fn activate_raw_mode(&self) -> io::Result<()> {
+        // TODO: is it a correct implementation
+        ::sys::tty::set_raw_input_mode(true);
+        Ok(())
     }
 }
 
